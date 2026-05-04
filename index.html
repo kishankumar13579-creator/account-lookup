@@ -77,8 +77,41 @@ tr {
 </head>
 
 <body>
+<!-- 🔐 LOGIN OVERLAY -->
+<div id="loginOverlay" style="
+position:fixed;
+top:0; left:0;
+width:100%; height:100%;
+background:linear-gradient(120deg,#89f7fe,#66a6ff);
+display:flex;
+justify-content:center;
+align-items:center;
+z-index:9999;
+">
 
-<div class="card">
+    <div style="
+    background:white;
+    padding:25px;
+    border-radius:12px;
+    width:300px;
+    box-shadow:0 10px 25px rgba(0,0,0,0.2);
+    text-align:center;
+    ">
+
+        <h2>Login</h2>
+
+        <input type="text" id="username" placeholder="Username"
+        oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase()">
+
+        <input type="password" id="password" placeholder="Password">
+
+        <button onclick="login()">Login</button>
+
+        <div id="error" style="color:red;"></div>
+    </div>
+</div>
+
+<div class="card" id="appContent" style="display:none;">
 
     <!-- Top Right Credit -->
     <div style="width:100%; display:flex; justify-content:flex-end; font-size:12px; color:#ed0a0a;">
@@ -90,28 +123,39 @@ tr {
     <input type="text" id="accId"
         placeholder="Enter Account ID"
         oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase(); searchData()">
-
+       
     <div id="status"></div>
     <div id="result" class="result hidden"></div>
 
     <div id="emiSection" class="hidden">
+	
+        <!-- Frequency -->
+		<select id="emiFrequency">
+			<option value="">Select Installment Frequency</option>
+			<option value="WEEKLY">Weekly</option>
+			<option value="FORTNIGHTLY">Fortnightly</option>
+			<option value="MONTHLY">Monthly</option>
+		</select>
 
-        <input type="text" id="emiAmount"
-            placeholder="Enter EMI Amount"
-            oninput="this.value=this.value.replace(/[^0-9]/g,'')">
-
-        <select id="emiDate">
-            <option value="">Select Installment Date Between 02 to 10</option>
-        </select>
-
-        <!-- ✅ BUTTON GROUP -->
-        <div style="display:flex; gap:8px;">
-            <button onclick="generateSchedule()">Generate</button>
-            <button id="downloadBtn" class="hidden" onclick="downloadPDF()">Download</button>
-            <button onclick="refreshPage()" style="background:#ff5c5c;">Refresh</button>
-        </div>
-
-    </div>
+		<!-- EMI Amount -->
+		<select id="emiAmount">
+			<option value="">Select Installment Amount</option>
+			<option value="500">500</option>
+			<option value="700">700</option>
+			<option value="1000">1000</option>
+			<option value="1500">1500</option>
+			<option value="2000">2000</option>
+			<option value="2500">2500</option>
+			<option value="3000">3000</option>
+		</select>		
+	
+		<div style="display:flex; gap:8px;">
+			<button onclick="generateSchedule()">Generate</button>
+			<button id="downloadBtn" class="hidden" onclick="downloadPDF()">Download</button>
+			<button onclick="refreshPage()" style="background:#ff5c5c;">Refresh</button>
+		</div>
+	
+	</div>
 
     <div id="schedule" class="result hidden"></div>
 
@@ -121,25 +165,45 @@ tr {
 
 let dataMap = {};
 let currentRecord = null;
-
-// Dropdown
-for (let i = 2; i <= 10; i++) {
-    let opt = document.createElement("option");
-    opt.value = i;
-    opt.text = i;
-    document.getElementById("emiDate").appendChild(opt);
-}
+let users = [];   // store login data
 
 // Load JSON
-window.onload = function () {
-    fetch('data.json')
-    .then(res => res.json())
-    .then(data => {
-        data.forEach(row => {
-            dataMap[String(row.AccountID).trim()] = row;
-        });
+Promise.all([
+    fetch('logindata.json').then(res => res.json()),
+    fetch('FinalWriteOffdata.json').then(res => res.json())
+])
+.then(([loginData, accountData]) => {
+
+    users = loginData;
+
+    accountData.forEach(row => {
+        dataMap[String(row.AccountID).trim()] = row;
     });
-};
+
+});
+
+// 🔐 LOGIN FUNCTION (UPDATED)
+function login() {
+    const user = document.getElementById("username").value.toUpperCase();
+    const pass = document.getElementById("password").value;
+
+    if(user === "" || pass === "") {
+        document.getElementById("error").innerText = "Enter Username & Password";
+        return;
+    }
+
+    // 🔎 Check from JSON
+    const validUser = users.find(u => 
+        u.LOGIN_ID === user && u.PASSWORD === pass
+    );
+
+    if(validUser) {
+        document.getElementById("loginOverlay").style.display = "none";
+        document.getElementById("appContent").style.display = "block";
+    } else {
+        document.getElementById("error").innerText = "Invalid credentials";
+    }
+}
 
 // Search
 function searchData() {
@@ -184,7 +248,7 @@ function searchData() {
 					</div>
 				
 					<div>
-						<b>Written-Off Amount :</b> ${record.WrittenOffAmount || ''}
+						<b>Written-Off Amount :</b> ${record.Final_WrittenOffAmount || ''}
 					</div>
 				
 				</div>  
@@ -203,60 +267,51 @@ function searchData() {
 function generateSchedule() {
 
     let emi = parseFloat(document.getElementById("emiAmount").value);
-    let emiDate = parseInt(document.getElementById("emiDate").value);
+    let freq = document.getElementById("emiFrequency").value;
 
     if (!currentRecord) return;
 
-    let total = Number(currentRecord.WrittenOffAmount) +
-                Number(currentRecord.InterestAmount);
+    let total = Number(currentRecord.Final_WrittenOffAmount);
 
-    if (!emi || isNaN(emi)) return alert("Enter valid EMI");
-    if (emi <= 0) return alert("EMI > 0");
-    if (emi > total) return alert("EMI cannot exceed total");
-    if (!emiDate) return alert("Select date Between 2 to 10 ");
+    if (!emi || isNaN(emi)) return alert("Select EMI amount");
+    if (emi <= 0) return alert("EMI must be greater than 0");
+    if (emi > total) return alert("EMI cannot exceed total amount");
+    if (!freq) return alert("Select frequency");
 
     let today = new Date();
-    let month = 1;
+
+    // ✅ START FROM NEXT MONTH
+    let nextDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+
+    let emiNo = 1;
 
     let html = `
     <div id="pdfContent">
 
         <h3 style="text-align:center;">WRITE-OFF CLIENT DETAILS</h3>
 
-        		<div style="position:relative;">
-		
-			<!-- ✅ LOGO FIXED TOP RIGHT -->
-			<img src="./ACFL_LOGO.png"
-				style="position:absolute; top:0; right:0; height:70px;">
-		
-			<!-- LEFT CONTENT -->
-			<div style="width:75%; font-size:13px;">
-		
-				<div style="margin-bottom:6px;">
-					<b>Branch Name :</b> ${currentRecord.BranchName || ''}
-				</div>
-		
-				<div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-					<span><b>Account ID :</b> ${currentRecord.AccountID || ''}</span>
-					<span><b>Client ID :</b> ${currentRecord.ClientID || ''}</span>
-				</div>
-		
-				<div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-					<span><b>Client Name :</b> ${currentRecord.ClientName || ''}</span>
-					<span><b>Spouse Name :</b> ${currentRecord.RelationName || ''}</span>
-				</div>
-		
-				<div style="margin-bottom:6px;">
-					<b>Address :</b> ${currentRecord.Address1 || ''}
-				</div>
-		
-				<div>
-					<b>Total Amount :</b> ${total}
-				</div>
-		
-			</div>
-		
-		</div>
+        <div style="position:relative;">
+            <img src="./ACFL_LOGO.png"
+                style="position:absolute; top:0; right:0; height:70px;">
+
+            <div style="width:75%; font-size:13px;">
+                <div><b>Branch Name :</b> ${currentRecord.BranchName || ''}</div>
+
+                <div style="display:flex; justify-content:space-between;">
+                    <span><b>Account ID :</b> ${currentRecord.AccountID || ''}</span>
+                    <span><b>Client ID :</b> ${currentRecord.ClientID || ''}</span>
+                </div>
+
+                <div style="display:flex; justify-content:space-between;">
+                    <span><b>Client Name :</b> ${currentRecord.ClientName || ''}</span>
+                    <span><b>Spouse Name :</b> ${currentRecord.RelationName || ''}</span>
+                </div>
+
+                <div><b>Address :</b> ${currentRecord.Address1 || ''}</div>
+
+                <div><b>Total Amount :</b> ${total}</div>
+            </div>
+        </div>
 
         <h3 style="text-align:center;">EMI SCHEDULE</h3>
 
@@ -271,22 +326,60 @@ function generateSchedule() {
 
     while (total > 0) {
 
+        // 📅 DATE LOGIC BASED ON FREQUENCY
+
+        if (freq === "WEEKLY") {
+
+            if (emiNo === 1) {
+                // first Tuesday of next month
+                while (nextDate.getDay() !== 2) {
+                    nextDate.setDate(nextDate.getDate() + 1);
+                }
+            } else {
+                nextDate.setDate(nextDate.getDate() + 7);
+            }
+        }
+
+        else if (freq === "FORTNIGHTLY") {
+
+            if (emiNo === 1) {
+                nextDate.setDate(5);
+            } else {
+                if (nextDate.getDate() === 5) {
+                    nextDate.setDate(20);
+                } else {
+                    nextDate.setMonth(nextDate.getMonth() + 1);
+                    nextDate.setDate(5);
+                }
+            }
+        }
+
+        else if (freq === "MONTHLY") {
+
+            if (emiNo === 1) {
+                nextDate.setDate(5);
+            } else {
+                nextDate.setMonth(nextDate.getMonth() + 1);
+                nextDate.setDate(5);
+            }
+        }
+
+        // 💰 EMI CALCULATION
         let payment = total < emi ? total : emi;
         total -= payment;
 
-        let date = new Date(today.getFullYear(), today.getMonth() + month, emiDate);
-        let dateStr = date.toLocaleDateString('en-GB').replace(/\//g,'-');
+        let dateStr = nextDate.toLocaleDateString('en-GB').replace(/\//g,'-');
 
         html += `
         <tr>
-            <td>${month}</td>
+            <td>${emiNo}</td>
             <td>${dateStr}</td>
             <td>${payment}</td>
             <td>${total.toFixed(2)}</td>
         </tr>
         `;
 
-        month++;
+        emiNo++;
     }
 
     html += `
@@ -307,7 +400,6 @@ function generateSchedule() {
     document.getElementById("schedule").classList.remove("hidden");
     document.getElementById("downloadBtn").classList.remove("hidden");
 }
-
 // Download PDF
 function downloadPDF() {
 
@@ -329,19 +421,26 @@ function downloadPDF() {
 // Refresh
 function refreshPage() {
 
+    // 🔹 Clear inputs
     document.getElementById("accId").value = "";
     document.getElementById("emiAmount").value = "";
-    document.getElementById("emiDate").value = "";
+    document.getElementById("emiFrequency").value = "";
 
+    // 🔹 Clear result content
     document.getElementById("result").innerHTML = "";
     document.getElementById("schedule").innerHTML = "";
 
+    // 🔹 Hide sections
     document.getElementById("result").classList.add("hidden");
     document.getElementById("schedule").classList.add("hidden");
     document.getElementById("emiSection").classList.add("hidden");
     document.getElementById("downloadBtn").classList.add("hidden");
 
+    // 🔹 Reset variables
     currentRecord = null;
+
+    // 🔹 Focus back to Account ID
+    document.getElementById("accId").focus();
 }
 
 </script>
