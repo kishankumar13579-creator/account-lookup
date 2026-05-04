@@ -89,7 +89,7 @@ tr {
 
     <input type="text" id="accId"
         placeholder="Enter Account ID"
-        oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,''); searchData()">
+        oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase(); searchData()">
 
     <div id="status"></div>
     <div id="result" class="result hidden"></div>
