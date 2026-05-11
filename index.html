@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+
+<meta http-equiv="Pragma" content="no-cache">
+
+<meta http-equiv="Expires" content="0">
+<title>Account Lookup + EMI Schedule</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: 'Segoe UI';
+    background: linear-gradient(120deg,#89f7fe,#66a6ff);
+    height: 100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+.card {
+    width:700px;
+    background:white;
+    padding:25px;
+    border-radius:15px;
+    box-shadow:0 10px 25px rgba(0,0,0,0.2);
+}
+
+input, select, button {
+    width:95%;
+    padding:12px;
+    margin-bottom:10px;
+    border-radius:8px;
+    font-size:16px;
+}
+
+button {
+    border:none;
+    background:#4facfe;
+    color:white;
+    cursor:pointer;
+}
+
+.hidden { display:none; }
+
+.result {
+    margin-top:10px;
+    padding:10px;
+    background:#f4f6f8;
+    border-radius:10px;
+    max-height:320px;
+    overflow:auto;
+}
+
+table {
+    width:98%;
+    margin:0 auto;
+    border-collapse:collapse;
+    table-layout:fixed;
+    text-align:center;
+}
+
+th, td {
+    border:1px solid #ccc;
+    padding:4px;
+    font-size:12px;
+    word-wrap:break-word;
+}
+
+th {
+    background:#e0e0e0;
+}
+
+tr {
+    page-break-inside: avoid;
+}
+.print-span{
+
+    width:100%;
+
+    padding:20px 30px 20px 20px;
+
+    font-family:'Noto Sans Devanagari',sans-serif;
+
+    font-size:14px;
+
+    line-height:2.2;
+
+    color:#000000;
+
+    text-align:left;
+
+    box-sizing:border-box;
+
+    overflow:hidden;
+}
+
+.line-block{
+
+    display:block;
+
+    margin-top:12px;
+
+    padding-right:15px;
+
+    white-space:normal;
+
+    word-break:normal;
+}
+
+.line-block strong{
+
+    font-weight:600;
+
+    color:#111111;
+}
+
+/* PRINT */
+
+@media print {
+
+    .print-span{
+
+        width:100%;
+
+        padding:18px 28px 18px 18px;
+
+        border:1px solid #999999;
+
+        border-radius:6px;
+
+        box-shadow:none;
+
+        page-break-inside:auto;
+    }
+
+    .line-block{
+
+        padding-right:20px;
+
+        line-height:2.3;
+    }
+}
+
+</style>
+</head>
+
+<body>
+<!-- 🔐 LOGIN OVERLAY -->
+<div id="loginOverlay" style="
+position:fixed;
+top:0; left:0;
+width:100%; height:100%;
+background:linear-gradient(120deg,#89f7fe,#66a6ff);
+display:flex;
+justify-content:center;
+align-items:center;
+z-index:9999;
+">
+
+    <div style="
+    background:white;
+    padding:25px;
+    border-radius:12px;
+    width:300px;
+    box-shadow:0 10px 25px rgba(0,0,0,0.2);
+    text-align:center;
+    ">
+
+        <h2>Login</h2>
+
+        <input type="text" id="username" placeholder="Username"
+        oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase()">
+
+        <input type="password" id="password" placeholder="Password">
+
+        <button onclick="login()">Login</button>
+
+        <div id="error" style="color:red;"></div>
+    </div>
+</div>
+
+<div class="card" id="appContent" style="display:none;">
+
+    <!-- Top Right Credit -->
+    <div style="width:100%; display:flex; justify-content:flex-end; font-size:12px; color:#ed0a0a;">
+        Developed by - Kishan Kumar
+    </div>
+
+    <h2>🔍 Write-Off Account Lookup</h2>
+
+    <input type="text" id="accId"
+        placeholder="Enter Account ID"
+        oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase(); searchData()">
+       
+    <div id="status"></div>
+    <div id="result" class="result hidden"></div>
+
+    <div id="emiSection" class="hidden">
+	
+        <!-- Frequency -->
+		<select id="emiFrequency">
+			<option value="">Select Installment Frequency</option>
+			<option value="WEEKLY">Weekly</option>
+			<option value="FORTNIGHTLY">Fortnightly</option>
+			<option value="MONTHLY">Monthly</option>
+		</select>
+
+		<!-- EMI Amount -->
+		<select id="emiAmount">
+			<option value="">Select Installment Amount</option>
+			<option value="500">500</option>
+			<option value="700">700</option>
+			<option value="1000">1000</option>
+			<option value="1500">1500</option>
+			<option value="2000">2000</option>
+			<option value="2500">2500</option>
+			<option value="3000">3000</option>
+		</select>		
+	
+		<div style="display:flex; gap:8px;">
+			<button onclick="generateSchedule()">Generate</button>
+			<button id="downloadBtn" class="hidden" onclick="downloadPDF()">Download</button>
+			<button onclick="refreshPage()" style="background:#ff5c5c;">Refresh</button>
+		</div>
+	
+	</div>
+
+    <div id="schedule" class="result hidden"></div>
+
+</div>
+
+<script>
+
+let dataMap = {};
+let currentRecord = null;
+let users = [];   // store login data
+
+// Load JSON
+const version = new Date().getTime();
+
+Promise.all([
+
+    fetch(`logindata.json?v=${version}`, {
+        cache: "no-store"
+    }).then(res => res.json()),
+
+    fetch(`FinalWriteOffdata.json?v=${version}`, {
+        cache: "no-store"
+    }).then(res => res.json())
+
+])
+
+.then(([loginData, accountData]) => {
+
+    users = loginData;
+
+    dataMap = {};
+
+    accountData.forEach(row => {
+
+        const accountId = String(row.AccountID || "").trim();
+
+        if(accountId){
+
+            dataMap[accountId] = row;
+        }
+
+    });
+
+    console.log("Latest JSON Loaded Successfully");
+
+})
+
+.catch(error => {
+
+    console.error("JSON Load Error:", error);
+
+})
+
+// 🔐 LOGIN FUNCTION (UPDATED)
+// ================= TAB CONTROL =================
+const currentTabId = Date.now().toString();
+
+// listen for other tab login
+window.addEventListener("storage", function (event) {
+    if (event.key === "activeTabId") {
+        if (event.newValue !== currentTabId) {
+            sessionStorage.removeItem("isLoggedIn");
+            alert("Logged out! Opened in another tab.");
+            window.location.reload();
+        }
+    }
+});
+
+
+// ================= LOGIN =================
+function login() {
+    const user = document.getElementById("username").value.toUpperCase();
+    const pass = document.getElementById("password").value;
+
+    if (user === "" || pass === "") {
+        document.getElementById("error").innerText = "Enter Username & Password";
+        return;
+    }
+
+    const validUser = users.find(u => 
+        u.LOGIN_ID === user && u.PASSWORD === pass
+    );
+
+    if (validUser) {
+
+        // ✅ use sessionStorage
+        sessionStorage.setItem("isLoggedIn", "true");
+
+        // 🔥 IMPORTANT: set active tab ONLY after login
+        localStorage.setItem("activeTabId", currentTabId);
+
+        document.getElementById("loginOverlay").style.display = "none";
+        document.getElementById("appContent").style.display = "block";
+
+        startSessionTimer(10);
+
+    } else {
+        document.getElementById("error").innerText = "Invalid credentials";
+    }
+}
+
+
+// ================= SESSION TIMER =================
+let timeout;
+
+function startSessionTimer(minutes = 1) {
+    const duration = minutes * 60 * 1000;
+
+    function logout() {
+        sessionStorage.removeItem("isLoggedIn");
+        alert("Session expired!");
+        window.location.reload();
+    }
+
+    function resetTimer() {
+        clearTimeout(timeout);
+        timeout = setTimeout(logout, duration);
+    }
+
+    // ❌ remove mousemove (causes continuous reset)
+    ["click", "keydown", "scroll"].forEach(event => {
+        document.addEventListener(event, resetTimer);
+    });
+
+    resetTimer();
+}
+
+
+// ================= ON LOAD =================
+window.onload = function () {
+
+    const activeTab = localStorage.getItem("activeTabId");
+
+    // ✅ Only allow if SAME tab
+    if (sessionStorage.getItem("isLoggedIn") === "true" && activeTab === currentTabId) {
+
+        document.getElementById("loginOverlay").style.display = "none";
+        document.getElementById("appContent").style.display = "block";
+
+        startSessionTimer(10);
+
+    } else {
+        // 🔥 force logout for old tab or new tab
+        sessionStorage.removeItem("isLoggedIn");
+
+        document.getElementById("loginOverlay").style.display = "flex";
+        document.getElementById("appContent").style.display = "none";
+    }
+};
+
+// Search
+function searchData() {
+
+    let id = document.getElementById("accId").value.trim();
+    let resultDiv = document.getElementById("result");
+    let emiSection = document.getElementById("emiSection");
+
+    if (id.length > 0 && (id.length < 12 || id.length > 14)) {
+        resultDiv.innerHTML = "❌ Account ID must be 12–14 characters";
+        resultDiv.classList.remove("hidden");
+        emiSection.classList.add("hidden");
+        return;
+    }
+
+    if (!id) {
+        resultDiv.classList.add("hidden");
+        emiSection.classList.add("hidden");
+        return;
+    }
+
+    let record = dataMap[id];
+
+    if (record) {
+        currentRecord = record;
+
+        resultDiv.innerHTML = `
+            	<div style="font-size:13px;">
+				
+					<div style="margin-bottom:6px;">
+						<strong>Branch Name :</strong> ${record.BranchName || ''}
+					</div>
+				
+					<div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+						<span><strong>Client ID :</strong> ${record.ClientID || ''}</span>
+						<span style="margin-right:150px;"><strong>Mobile No :</strong> ${record.Mobile || ''}</span>
+					</div>
+				
+					<div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+						<span><strong>Client Name :</strong> ${record.ClientName || ''}</span>
+						<span style="margin-right:150px;"><strong>Spouse Name :</strong> ${record.RelationName || ''}</span>
+					</div>
+				
+					<div>
+						<strong>Written-Off Amount :</strong> ${record.Final_WrittenOffAmount || ''}
+					</div>
+				
+				</div>  
+                   
+        `;
+        resultDiv.classList.remove("hidden");
+        emiSection.classList.remove("hidden");
+    } else {
+        resultDiv.innerHTML = "No data found";
+        resultDiv.classList.remove("hidden");
+        emiSection.classList.add("hidden");
+    }
+}
+
+// Generate Schedule
+function generateSchedule() {
+
+    let emi = parseFloat(document.getElementById("emiAmount").value);
+    let freq = document.getElementById("emiFrequency").value;
+
+    if (!currentRecord) return;
+
+    let total = Number(currentRecord.Final_WrittenOffAmount);
+
+    if (!emi || isNaN(emi)) return alert("Select EMI amount");
+    if (emi <= 0) return alert("EMI must be greater than 0");
+    if (emi > total) return alert("EMI cannot exceed total amount");
+    if (!freq) return alert("Select frequency");
+
+    let today = new Date();
+
+    // ✅ START FROM NEXT MONTH
+    let nextDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+
+    let emiNo = 1;
+
+    let html = `
+    <div id="pdfContent">
+
+        <h3 style="text-align:center;">WRITE-OFF CLIENT DETAILS</h3>
+
+        <div style="position:relative;">
+            <img src="./ACFL_LOGO.png"
+                style="position:absolute; top:0; right:0; height:70px;">
+
+            <div style="width:75%; font-size:13px;">
+                <div><strong>Branch Name :</strong> ${currentRecord.BranchName || ''}</div>
+
+                <div style="display:flex; justify-content:space-between;">
+                    <span><strong>Account ID :</strong> ${currentRecord.AccountID || ''}</span>
+                    <span><strong>Client ID :</strong> ${currentRecord.ClientID || ''}</span>
+                </div>
+
+                <div style="display:flex; justify-content:space-between;">
+                    <span><strong>Client Name :</strong> ${currentRecord.ClientName || ''}</span>
+                    <span><strong>Spouse Name :</strong> ${currentRecord.RelationName || ''}</span>
+                </div>
+
+                <div><strong>Address :</strong> ${currentRecord.Address1 || ''}</div>
+
+                <div><strong>Total Amount :</strong> ${total}</div>
+            </div>
+        </div>
+
+        <h3 style="text-align:center;">EMI SCHEDULE</h3>
+
+        <table>
+            <tr>
+                <th>EMI NO</th>
+                <th>EMI DATE</th>
+                <th>EMI AMOUNT</th>
+                <th>OUTSTANDING</th>
+            </tr>
+    `;
+
+    while (total > 0) {
+
+        // 📅 DATE LOGIC BASED ON FREQUENCY
+
+        	if (freq === "WEEKLY") {
+			
+				if (emiNo === 1) {
+					// use existing nextDate, set it to today first
+					nextDate.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
+			
+					// move to tomorrow (> today)
+					nextDate.setDate(nextDate.getDate() + 1);
+			
+					// find next Tuesday
+					while (nextDate.getDay() !== 2) {
+						nextDate.setDate(nextDate.getDate() + 1);
+					}
+			
+				} else {
+					// next weekly installment
+					nextDate.setDate(nextDate.getDate() + 7);
+				}
+			}
+
+            else if (freq === "FORTNIGHTLY") {
+		
+					if (emiNo === 1) {
+		
+						nextDate = new Date(today);
+		
+						let day = today.getDate();
+		
+						if (day < 5) {
+							nextDate.setDate(5);
+						} else if (day < 20) {
+							nextDate.setDate(20);
+						} else {
+							nextDate.setMonth(nextDate.getMonth() + 1);
+							nextDate.setDate(5);
+						}
+		
+					} else {
+		
+						if (nextDate.getDate() === 5) {
+							nextDate.setDate(20);
+						} else {
+							nextDate.setMonth(nextDate.getMonth() + 1);
+							nextDate.setDate(5);
+						}
+		
+					}
+		    }
+
+        else if (freq === "MONTHLY") {
+
+            if (emiNo === 1) {
+                nextDate.setDate(5);
+            } else {
+                nextDate.setMonth(nextDate.getMonth() + 1);
+                nextDate.setDate(5);
+            }
+        }
+
+        // 💰 EMI CALCULATION
+        let payment = total < emi ? total : emi;
+        total -= payment;
+
+        let dateStr = nextDate.toLocaleDateString('en-GB').replace(/\//g,'-');
+
+        html += `
+        <tr>
+            <td>${emiNo}</td>
+            <td>${dateStr}</td>
+            <td>${payment}</td>
+            <td>${total.toFixed(2)}</td>
+        </tr>
+        `;
+
+        emiNo++;
+    }
+
+    html += `
+        </table>
+        <div class="print-span">
+
+    <span class="line-block">
+        <strong>सहमति पत्र एवं घोषणा (Consent & Undertaking)</strong>
+    </span>
+
+    <span class="line-block">
+        मैं, <strong>${currentRecord.ClientName || ''}</strong>
+        (उधारकर्ता का नाम), पत्नी/पुत्री/पुत्र
+        <strong>${currentRecord.RelationName || ''}</strong>,
+        निवासी <strong>${currentRecord.Address1 || ''}</strong>,
+        यह घोषित करती/करता हूँ कि मुझे मेरे ऋण खाता संख्या
+        <strong>${currentRecord.AccountID || ''}</strong>
+        के संबंध में संशोधित EMI अनुसूची (Revised EMI Schedule)
+        प्राप्त हो गई है।
+    </span>
+
+    <span class="line-block">
+        मुझे अवगत कराया गया है कि मेरी मासिक किस्त (EMI) को कम करते हुए
+        ऋण की अवधि (Tenure) बढ़ाई गई है, जिससे भुगतान मेरे लिए सरल एवं
+        सुविधाजनक हो सके।
+    </span>
+
+    <span class="line-block">
+        मैं संशोधित EMI राशि ₹ <strong>${emi}</strong>
+        प्रति माह तथा संशोधित अवधि के अनुसार निर्धारित तिथियों पर
+        पूर्ण एवं समय पर भुगतान करने के लिए सहमत हूँ।
+    </span>
+
+    <span class="line-block">
+        मैं यह भी घोषित करती/करता हूँ कि:
+    </span>
+
+    <span class="line-block">
+        1. मैंने संशोधित पुनर्भुगतान अनुसूची को पढ़ लिया/समझ लिया है तथा
+        मुझे इसकी सभी शर्तें स्वीकार हैं।
+    </span>
+
+    <span class="line-block">
+        2. मैंने NACH/ऑटो डेबिट (Auto Debit) हेतु अपनी सहमति प्रदान की है
+        और यह सहमति तब तक प्रभावी रहेगी जब तक ऋण की संपूर्ण बकाया राशि
+        का भुगतान नहीं हो जाता।
+    </span>
+
+    <span class="line-block">
+        3. मैं अपने बैंक खाते में निर्धारित EMI राशि तथा अन्य देय शुल्क/ब्याज
+        (यदि कोई हो) की वसूली हेतु पर्याप्त शेष राशि बनाए रखने के लिए
+        उत्तरदायी रहूँगी/रहूँगा।
+    </span>
+
+    <span class="line-block">
+        4. यदि किसी कारणवश मेरे खाते में पर्याप्त शेष राशि उपलब्ध नहीं रहती है,
+        तो उसके परिणामस्वरूप लगने वाले दंडात्मक शुल्क, बैंक चार्ज या अन्य
+        देय राशि का भुगतान करने के लिए मैं स्वयं उत्तरदायी रहूँगी/रहूँगा।
+    </span>
+
+    <span class="line-block">
+        5. संशोधित EMI अनुसूची पूर्व निर्धारित अनुसूची का स्थान लेगी तथा
+        अन्य सभी नियम एवं शर्तें यथावत लागू रहेंगी।
+    </span>
+
+    <span class="line-block">
+        यह सहमति मैं अपनी पूर्ण समझ एवं स्वेच्छा से,
+        बिना किसी दबाव, प्रलोभन या गलत प्रस्तुति के दे रही/रहा हूँ।
+    </span>
+
+    <span class="line-block">
+        दिनांक: ____
+    </span>
+
+    <span class="line-block">
+        स्थान: ____
+    </span>
+
+    <span class="line-block">
+        उधारकर्ता के हस्ताक्षर/अंगूठा निशान: ________
+    </span>
+
+    <span class="line-block">
+        नाम: ________
+    </span>
+
+    <span class="line-block">
+        मोबाइल नंबर: ________
+    </span>
+
+</div>
+        <div style="margin-top:60px; display:flex; justify-content:flex-end;">
+            <div style="text-align:center;">
+                <div style="border-top:1px solid #000; width:180px;"></div>
+                <div><strong>Authorized Signature</strong></div>
+                <div>(Stamp)</div>
+            </div>
+        </div>
+
+    </div>
+    `;
+    
+
+    document.getElementById("schedule").innerHTML = html;
+    document.getElementById("schedule").classList.remove("hidden");
+    document.getElementById("downloadBtn").classList.remove("hidden");
+}
+// Download PDF
+function downloadPDF() {
+
+    let element = document.getElementById("pdfContent");
+
+    let fileName = `${currentRecord.AccountID}_${currentRecord.ClientName}.pdf`;
+
+    let opt = {
+        margin:[10,8,15,8],
+        filename:fileName,
+        html2canvas:{scale:1.6, scrollY:0, useCORS:true},
+        jsPDF:{unit:'mm',format:'a4'},
+        pagebreak:{mode:['css','legacy']}
+    };
+
+    html2pdf().set(opt).from(element).save();
+}
+
+// Refresh
+function refreshPage() {
+
+    // 🔹 Clear inputs
+    document.getElementById("accId").value = "";
+    document.getElementById("emiAmount").value = "";
+    document.getElementById("emiFrequency").value = "";
+
+    // 🔹 Clear result content
+    document.getElementById("result").innerHTML = "";
+    document.getElementById("schedule").innerHTML = "";
+
+    // 🔹 Hide sections
+    document.getElementById("result").classList.add("hidden");
+    document.getElementById("schedule").classList.add("hidden");
+    document.getElementById("emiSection").classList.add("hidden");
+    document.getElementById("downloadBtn").classList.add("hidden");
+
+    // 🔹 Reset variables
+    currentRecord = null;
+
+    // 🔹 Focus back to Account ID
+    document.getElementById("accId").focus();
+}
+
+</script>
+
+</body>
+</html>
